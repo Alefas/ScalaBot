@@ -33,8 +33,8 @@ trait SocketExtension extends BotExtension {
   val cache: Cache[Any] = LruCache(timeToLive = cacheExpiration)
   val pipeline: HttpRequest => Future[HttpResponse] = sendReceive
 
-  def cacheExpiration: Duration = 1 day
-  final def makeRequest[T](intent: SocketIntent)(implicit manifest: Manifest[T]): Unit = {
+  def cacheExpiration: Duration = 1.day
+  final def makeRequest[T](intent: SocketIntent)(implicit manifest: Manifest[T]): Future[Any] = {
     val uri = Uri(intent.url).withQuery(intent.requestParams.params)
     if (intent.requestParams.canCache) {
       val result = cache(uri) {
@@ -42,27 +42,25 @@ trait SocketExtension extends BotExtension {
           .map(_.entity.asString)
           .map(parse(_).extract[T])
       }
-      result.foreach(result => self ! ResultIntent(intent.sender, result))
+      result
     } else {
       pipeline(HttpRequest(intent.requestParams.method, uri, intent.requestParams.headers))
         .map(_.entity.asString)
         .map(parse(_).extract[T])
-        .foreach(result => self ! ResultIntent(intent.sender, result))
     }
   }
 
-  final def makeRequest(intent: SocketIntent): Unit = {
+  final def makeRequest(intent: SocketIntent): Future[Any] = {
     val uri = Uri(intent.url).withQuery(intent.requestParams.params)
     if (intent.requestParams.canCache) {
       val result = cache(uri) {
         pipeline(HttpRequest(intent.requestParams.method, uri, intent.requestParams.headers))
           .map(_.entity.asString)
       }
-      result.foreach(result => self ! ResultIntent(intent.sender, result))
+      result
     } else {
       pipeline(HttpRequest(intent.requestParams.method, uri, intent.requestParams.headers))
         .map(_.entity.asString)
-        .foreach(result => self ! ResultIntent(intent.sender, result))
     }
   }
 }
